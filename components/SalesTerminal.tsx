@@ -13,7 +13,7 @@ const SalesTerminal: React.FC<SalesTerminalProps> = ({ products, onCompleteSale 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory | 'Todos'>('Todos');
-  const [paymentMethod, setPaymentMethod] = useState<'Efectivo' | 'Tarjeta' | 'Transferencia' | 'Billetera Digital'>('Efectivo');
+  const [paymentMethod, setPaymentMethod] = useState<'Efectivo' | 'Tarjeta' | 'Transferencia' | 'Yape/Plin'>('Efectivo');
   
   // States for Change Calculation
   const [amountPaid, setAmountPaid] = useState<string>('');
@@ -75,7 +75,7 @@ const SalesTerminal: React.FC<SalesTerminalProps> = ({ products, onCompleteSale 
     }
 
     const newSale: Sale = {
-      id: `SALE-${Date.now()}`,
+      id: `B001-${Math.floor(Date.now() / 1000)}`, // Format ID like a Boleta series
       date: new Date().toISOString(),
       items: [...cart],
       total: cartTotal,
@@ -93,43 +93,168 @@ const SalesTerminal: React.FC<SalesTerminalProps> = ({ products, onCompleteSale 
 
   const generateReceipt = (sale: Sale, paid: number, changeVal: number) => {
     const doc = new jsPDF();
-    
-    doc.setFontSize(18);
-    doc.text('Licorería Don Bacco', 105, 20, { align: 'center' });
-    
-    doc.setFontSize(10);
-    doc.text(`Ticket: ${sale.id}`, 14, 30);
-    doc.text(`Fecha: ${new Date(sale.date).toLocaleString('es-PE')}`, 14, 35);
-    doc.text(`Pago: ${sale.paymentMethod}`, 14, 40);
+    const pageWidth = doc.internal.pageSize.width;
+    const margin = 15;
 
+    // --- Variables de Diseño ---
+    const colorBlack = '#1a1a1a';
+    const colorGray = '#4b5563';
+    const colorBrand = '#7e22ce'; // Morado
+
+    // --- Encabezado Empresa ---
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor(colorBlack);
+    doc.text('LICORERÍA DON BACCO', margin, 20);
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(colorGray);
+    doc.text('Av. Las Torres 123, Lima, Perú', margin, 26);
+    doc.text('Tel: (01) 555-0909 | Email: contacto@donbacco.com', margin, 30);
+
+    // --- Recuadro RUC (Derecha) ---
+    const rucBoxWidth = 70;
+    const rucBoxHeight = 25;
+    const rucBoxX = pageWidth - margin - rucBoxWidth;
+    const rucBoxY = 15;
+
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.5);
+    doc.rect(rucBoxX, rucBoxY, rucBoxWidth, rucBoxHeight);
+
+    doc.setFontSize(10);
+    doc.setTextColor(colorBlack);
+    doc.setFont('helvetica', 'bold');
+    doc.text('R.U.C. 20601234567', rucBoxX + rucBoxWidth / 2, rucBoxY + 7, { align: 'center' });
+    
+    doc.setFillColor(colorBrand); 
+    doc.rect(rucBoxX, rucBoxY + 9, rucBoxWidth, 7, 'F'); // Franja morada
+    doc.setTextColor(255, 255, 255);
+    doc.text('BOLETA DE VENTA ELECTRÓNICA', rucBoxX + rucBoxWidth / 2, rucBoxY + 14, { align: 'center' });
+    
+    doc.setTextColor(colorBlack);
+    doc.text(`${sale.id}`, rucBoxX + rucBoxWidth / 2, rucBoxY + 21, { align: 'center' });
+
+    // --- Datos del Cliente y Emisión ---
+    const infoY = 50;
+    doc.setFontSize(9);
+    doc.setTextColor(colorGray);
+    doc.setFont('helvetica', 'bold');
+    doc.text('FECHA DE EMISIÓN:', margin, infoY);
+    doc.text('CLIENTE:', margin, infoY + 6);
+    doc.text('MONEDA:', margin, infoY + 12);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(colorBlack);
+    const dateObj = new Date(sale.date);
+    doc.text(dateObj.toLocaleDateString('es-PE') + ' ' + dateObj.toLocaleTimeString('es-PE'), margin + 40, infoY);
+    doc.text('CLIENTE GENERAL', margin + 40, infoY + 6);
+    doc.text('SOLES (PEN)', margin + 40, infoY + 12);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(colorGray);
+    doc.text('FORMA DE PAGO:', pageWidth / 2 + 10, infoY);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(colorBlack);
+    doc.text(sale.paymentMethod.toUpperCase(), pageWidth / 2 + 45, infoY);
+
+    // --- Tabla de Productos ---
     const tableData = sale.items.map(item => [
-      item.quantity,
-      item.name,
-      `S/ ${item.price.toFixed(2)}`,
-      `S/ ${(item.price * item.quantity).toFixed(2)}`
+        item.quantity,
+        'UNID',
+        item.name + (item.capacity ? ` (${item.capacity})` : ''),
+        `S/ ${item.price.toFixed(2)}`,
+        `S/ ${(item.price * item.quantity).toFixed(2)}`
     ]);
 
     autoTable(doc, {
-      startY: 45,
-      head: [['Cant', 'Producto', 'P.Unit', 'Subtotal']],
+      startY: infoY + 20,
+      head: [['CANT.', 'U.M.', 'DESCRIPCIÓN', 'P. UNIT', 'IMPORTE']],
       body: tableData,
-      theme: 'grid',
-      styles: { fontSize: 9 },
+      theme: 'plain',
+      styles: {
+        fontSize: 9,
+        cellPadding: 4,
+        textColor: colorBlack,
+        font: 'helvetica',
+      },
+      headStyles: {
+        fillColor: [243, 244, 246], // Gris muy claro
+        textColor: colorBlack,
+        fontStyle: 'bold',
+        lineWidth: { bottom: 0.5 },
+        lineColor: [200, 200, 200]
+      },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 15 },
+        1: { halign: 'center', cellWidth: 15 },
+        2: { halign: 'left' },
+        3: { halign: 'right', cellWidth: 25 },
+        4: { halign: 'right', cellWidth: 25 }
+      },
+      didDrawPage: (data) => {
+         // Línea simple al final de la tabla
+         // @ts-ignore
+         const finalY = data.cursor.y;
+         doc.setDrawColor(200, 200, 200);
+         doc.line(margin, finalY, pageWidth - margin, finalY);
+      }
     });
 
-    // @ts-ignore - autoTable adds lastAutoTable property
-    const finalY = doc.lastAutoTable.finalY || 60;
+    // --- Cálculos de Totales (Desglose IGV 18%) ---
+    // @ts-ignore
+    const finalY = doc.lastAutoTable.finalY + 5;
+    const rightColX = pageWidth - margin - 25;
+    const labelX = pageWidth - margin - 60;
     
-    doc.setFontSize(14);
-    doc.text(`Total: S/ ${sale.total.toFixed(2)}`, 14, finalY + 10);
+    const total = sale.total;
+    const baseImponible = total / 1.18;
+    const igv = total - baseImponible;
 
-    if (sale.paymentMethod === 'Efectivo') {
-        doc.setFontSize(10);
-        doc.text(`Pagó con: S/ ${paid.toFixed(2)}`, 14, finalY + 16);
-        doc.text(`Vuelto: S/ ${changeVal.toFixed(2)}`, 14, finalY + 21);
-    }
+    doc.setFontSize(9);
     
-    doc.save(`Ticket_${sale.id}.pdf`);
+    // Op. Gravada
+    doc.setTextColor(colorGray);
+    doc.text('OP. GRAVADA:', labelX, finalY, { align: 'right' });
+    doc.setTextColor(colorBlack);
+    doc.text(`S/ ${baseImponible.toFixed(2)}`, rightColX, finalY, { align: 'right' });
+
+    // IGV
+    doc.setTextColor(colorGray);
+    doc.text('I.G.V. (18%):', labelX, finalY + 5, { align: 'right' });
+    doc.setTextColor(colorBlack);
+    doc.text(`S/ ${igv.toFixed(2)}`, rightColX, finalY + 5, { align: 'right' });
+
+    // Total Importe
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(colorGray);
+    doc.text('IMPORTE TOTAL:', labelX, finalY + 12, { align: 'right' });
+    doc.setTextColor(colorBrand);
+    doc.text(`S/ ${total.toFixed(2)}`, rightColX, finalY + 12, { align: 'right' });
+
+    // --- Pagos (Si es efectivo) ---
+    if (sale.paymentMethod === 'Efectivo') {
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(colorGray);
+        doc.text('Efectivo Recibido:', labelX, finalY + 18, { align: 'right' });
+        doc.text(`S/ ${paid.toFixed(2)}`, rightColX, finalY + 18, { align: 'right' });
+        
+        doc.text('Vuelto:', labelX, finalY + 23, { align: 'right' });
+        doc.text(`S/ ${changeVal.toFixed(2)}`, rightColX, finalY + 23, { align: 'right' });
+    }
+
+    // --- Pie de Página Legal ---
+    const footerY = 280;
+    doc.setFontSize(7);
+    doc.setTextColor(150, 150, 150);
+    doc.text('Representación impresa de la BOLETA DE VENTA ELECTRÓNICA.', margin, footerY);
+    doc.text('Autorizado mediante Resolución de Intendencia N° 034-005-0005432/SUNAT', margin, footerY + 4);
+    doc.text('Consulte su documento en www.donbacco.com/facturacion', margin, footerY + 8);
+
+    doc.save(`Boleta_${sale.id}.pdf`);
   };
 
   return (
@@ -248,10 +373,10 @@ const SalesTerminal: React.FC<SalesTerminalProps> = ({ products, onCompleteSale 
                       <Banknote className="w-4 h-4 mb-1" /> Efec.
                   </button>
                   <button 
-                    onClick={() => setPaymentMethod('Billetera Digital')}
-                    className={`flex flex-col items-center justify-center p-2 rounded-lg border text-xs font-medium transition ${paymentMethod === 'Billetera Digital' ? 'bg-pink-50 dark:bg-pink-900/30 border-pink-500 text-pink-700 dark:text-pink-400' : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400'}`}
+                    onClick={() => setPaymentMethod('Yape/Plin')}
+                    className={`flex flex-col items-center justify-center p-2 rounded-lg border text-xs font-medium transition ${paymentMethod === 'Yape/Plin' ? 'bg-pink-50 dark:bg-pink-900/30 border-pink-500 text-pink-700 dark:text-pink-400' : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400'}`}
                   >
-                      <Smartphone className="w-4 h-4 mb-1" /> Dig.
+                      <Smartphone className="w-4 h-4 mb-1" /> Yape/Plin
                   </button>
                   <button 
                     onClick={() => setPaymentMethod('Tarjeta')}
