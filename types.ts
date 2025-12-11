@@ -30,7 +30,7 @@ export interface Sale {
   date: string; // ISO string
   items: CartItem[];
   total: number;
-  paymentMethod: 'Efectivo' | 'Tarjeta' | 'Transferencia';
+  paymentMethod: 'Efectivo' | 'Tarjeta' | 'Transferencia' | 'Billetera Digital';
   customerId?: string;
 }
 

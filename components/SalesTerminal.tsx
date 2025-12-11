@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Product, CartItem, ProductCategory, Sale } from '../types';
-import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, FileText } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, FileText, Smartphone } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -13,7 +13,17 @@ const SalesTerminal: React.FC<SalesTerminalProps> = ({ products, onCompleteSale 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory | 'Todos'>('Todos');
-  const [paymentMethod, setPaymentMethod] = useState<'Efectivo' | 'Tarjeta' | 'Transferencia'>('Efectivo');
+  const [paymentMethod, setPaymentMethod] = useState<'Efectivo' | 'Tarjeta' | 'Transferencia' | 'Billetera Digital'>('Efectivo');
+  
+  // States for Change Calculation
+  const [amountPaid, setAmountPaid] = useState<string>('');
+
+  // Reset amount paid when cart changes significantly or payment method changes
+  useEffect(() => {
+    if (paymentMethod !== 'Efectivo') {
+      setAmountPaid('');
+    }
+  }, [paymentMethod]);
 
   // Filter products
   const filteredProducts = useMemo(() => {
@@ -51,9 +61,18 @@ const SalesTerminal: React.FC<SalesTerminalProps> = ({ products, onCompleteSale 
   };
 
   const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  
+  // Calculate Change
+  const amountPaidNum = parseFloat(amountPaid) || 0;
+  const change = amountPaidNum - cartTotal;
+  const isInsufficient = paymentMethod === 'Efectivo' && amountPaidNum < cartTotal && amountPaid !== '';
 
   const handleCheckout = () => {
     if (cart.length === 0) return;
+    if (paymentMethod === 'Efectivo' && amountPaidNum < cartTotal) {
+        alert("El monto pagado es insuficiente.");
+        return;
+    }
 
     const newSale: Sale = {
       id: `SALE-${Date.now()}`,
@@ -64,14 +83,15 @@ const SalesTerminal: React.FC<SalesTerminalProps> = ({ products, onCompleteSale 
     };
 
     // Generate Receipt PDF
-    generateReceipt(newSale);
+    generateReceipt(newSale, amountPaidNum, change);
 
     onCompleteSale(newSale);
     setCart([]);
-    alert('¡Venta completada con éxito!');
+    setAmountPaid('');
+    alert(`¡Venta completada!\n${paymentMethod === 'Efectivo' ? `Vuelto a entregar: S/ ${change.toFixed(2)}` : ''}`);
   };
 
-  const generateReceipt = (sale: Sale) => {
+  const generateReceipt = (sale: Sale, paid: number, changeVal: number) => {
     const doc = new jsPDF();
     
     doc.setFontSize(18);
@@ -102,6 +122,12 @@ const SalesTerminal: React.FC<SalesTerminalProps> = ({ products, onCompleteSale 
     
     doc.setFontSize(14);
     doc.text(`Total: S/ ${sale.total.toFixed(2)}`, 14, finalY + 10);
+
+    if (sale.paymentMethod === 'Efectivo') {
+        doc.setFontSize(10);
+        doc.text(`Pagó con: S/ ${paid.toFixed(2)}`, 14, finalY + 16);
+        doc.text(`Vuelto: S/ ${changeVal.toFixed(2)}`, 14, finalY + 21);
+    }
     
     doc.save(`Ticket_${sale.id}.pdf`);
   };
@@ -214,38 +240,74 @@ const SalesTerminal: React.FC<SalesTerminalProps> = ({ products, onCompleteSale 
         <div className="p-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 rounded-b-xl space-y-4">
           <div>
               <label className="text-xs font-semibold text-gray-500 uppercase mb-2 block">Método de Pago</label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                   <button 
                     onClick={() => setPaymentMethod('Efectivo')}
                     className={`flex flex-col items-center justify-center p-2 rounded-lg border text-xs font-medium transition ${paymentMethod === 'Efectivo' ? 'bg-green-50 dark:bg-green-900/30 border-green-500 text-green-700 dark:text-green-400' : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400'}`}
                   >
-                      <Banknote className="w-4 h-4 mb-1" /> Efectivo
+                      <Banknote className="w-4 h-4 mb-1" /> Efec.
+                  </button>
+                  <button 
+                    onClick={() => setPaymentMethod('Billetera Digital')}
+                    className={`flex flex-col items-center justify-center p-2 rounded-lg border text-xs font-medium transition ${paymentMethod === 'Billetera Digital' ? 'bg-pink-50 dark:bg-pink-900/30 border-pink-500 text-pink-700 dark:text-pink-400' : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400'}`}
+                  >
+                      <Smartphone className="w-4 h-4 mb-1" /> Dig.
                   </button>
                   <button 
                     onClick={() => setPaymentMethod('Tarjeta')}
                     className={`flex flex-col items-center justify-center p-2 rounded-lg border text-xs font-medium transition ${paymentMethod === 'Tarjeta' ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-400' : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400'}`}
                   >
-                      <CreditCard className="w-4 h-4 mb-1" /> Tarjeta
+                      <CreditCard className="w-4 h-4 mb-1" /> Tarj.
                   </button>
                    <button 
                     onClick={() => setPaymentMethod('Transferencia')}
                     className={`flex flex-col items-center justify-center p-2 rounded-lg border text-xs font-medium transition ${paymentMethod === 'Transferencia' ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-500 text-purple-700 dark:text-purple-400' : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400'}`}
                   >
-                      <FileText className="w-4 h-4 mb-1" /> Transf.
+                      <FileText className="w-4 h-4 mb-1" /> Trans.
                   </button>
               </div>
           </div>
           
-          <div className="flex justify-between items-end">
-            <span className="text-gray-500 dark:text-gray-400">Total a Pagar:</span>
-            <span className="text-3xl font-bold text-gray-900 dark:text-white">S/ {cartTotal.toFixed(2)}</span>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+                <span className="text-gray-500 dark:text-gray-400">Total a Pagar:</span>
+                <span className="text-3xl font-bold text-gray-900 dark:text-white">S/ {cartTotal.toFixed(2)}</span>
+            </div>
+
+            {/* Change Calculator Logic */}
+            {paymentMethod === 'Efectivo' && cart.length > 0 && (
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-100 dark:border-yellow-800 animate-fade-in">
+                    <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Monto recibido:</label>
+                        <div className="relative w-32">
+                             <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">S/</span>
+                             <input 
+                                type="number" 
+                                className="w-full pl-8 pr-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-right focus:ring-2 focus:ring-brand-500 outline-none dark:bg-gray-800"
+                                value={amountPaid}
+                                onChange={(e) => setAmountPaid(e.target.value)}
+                                placeholder="0.00"
+                             />
+                        </div>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-yellow-200 dark:border-yellow-800">
+                        <span className="text-sm font-bold text-gray-600 dark:text-gray-400">VUELTO:</span>
+                        <span className={`text-xl font-bold ${change < 0 ? 'text-red-500' : 'text-green-600 dark:text-green-400'}`}>
+                            S/ {change >= 0 ? change.toFixed(2) : '---'}
+                        </span>
+                    </div>
+                     {isInsufficient && (
+                        <p className="text-xs text-red-500 text-right mt-1 font-medium">Monto insuficiente</p>
+                    )}
+                </div>
+            )}
           </div>
 
           <button
             onClick={handleCheckout}
-            disabled={cart.length === 0}
+            disabled={cart.length === 0 || (paymentMethod === 'Efectivo' && amountPaidNum < cartTotal)}
             className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition active:scale-95 ${
-              cart.length === 0 
+              cart.length === 0 || (paymentMethod === 'Efectivo' && amountPaidNum < cartTotal)
                 ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' 
                 : 'bg-gray-900 dark:bg-brand-600 text-white hover:bg-gray-800 dark:hover:bg-brand-700'
             }`}
