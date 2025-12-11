@@ -1,0 +1,7 @@
+{
+  "name": "Licorería - 404 Studio",
+  "description": "Sistema de gestión integral para licorerías: inventario, ventas, clientes y reportes con IA.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
